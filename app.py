@@ -75,7 +75,8 @@ def sidebar() -> tuple[ScoringConfig, str | None]:
 
     with st.sidebar.expander("Brief AI (Claude)", expanded=False):
         key = st.text_input("ANTHROPIC_API_KEY", type="password",
-                            help="Lascia vuoto se la variabile d'ambiente è già impostata.")
+                            help="Facoltativa. Senza chiave il tool prepara il prompt da incollare in "
+                                 "Claude.ai. Lascia vuoto se la variabile d'ambiente è già impostata.")
         if key:
             ss["anthropic_key"] = key
         ss["use_web"] = st.toggle("Analizza la SERP con ricerca web", value=True)
@@ -308,11 +309,32 @@ def candidates_view(df: pd.DataFrame):
     d2.download_button("⬇️ CSV", export.to_csv(index=False).encode("utf-8"), "content_curation.csv", "text/csv")
 
 
+def has_api_key() -> bool:
+    return bool(ss.get("anthropic_key") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"))
+
+
+def slug(url: str) -> str:
+    return url.rstrip("/").rsplit("/", 1)[-1]
+
+
+def chat_prompt_box(row: pd.Series, ds: Dataset):
+    """Modalità senza chiave API: prompt completo da incollare in Claude.ai."""
+    from curation.brief import build_chat_prompt
+    prompt = build_chat_prompt(row, queries_for(ds, row["url"]))
+    st.info("Nessuna chiave API Anthropic configurata. Copia il prompt qui sotto (icona in alto a destra "
+            "del riquadro) e incollalo in una nuova chat su [Claude.ai](https://claude.ai), con la "
+            "**ricerca web attiva** per l'analisi della SERP.")
+    st.download_button("⬇️ Scarica prompt (.md)", prompt.encode("utf-8"),
+                       f"prompt-{slug(row['url'])}.md", "text/markdown")
+    with st.container(height=420):
+        st.code(prompt, language="markdown", wrap_lines=True)
+
+
 def _generate(row: pd.Series, ds: Dataset):
     import anthropic
 
     from curation.brief import generate_brief
-    if not (ss.get("anthropic_key") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")):
+    if not has_api_key():
         raise RuntimeError("chiave API mancante: inseriscila in sidebar → «Brief AI (Claude)» "
                            "oppure imposta ANTHROPIC_API_KEY nel file .env.")
     try:
@@ -391,6 +413,9 @@ def detail_view(df: pd.DataFrame, ds: Dataset):
                    + (" · SERP analizzata con ricerca web" if b.used_web_search else ""))
         st.download_button("⬇️ Scarica brief (.md)", b.markdown.encode("utf-8"),
                            f"brief-{url.rstrip('/').rsplit('/', 1)[-1]}.md", "text/markdown")
+    if not has_api_key():
+        chat_prompt_box(row, ds)
+        return
     label = "Rigenera brief" if url in ss.briefs else "Genera brief con Claude"
     if st.button(label, type="primary"):
         with st.spinner("Claude sta analizzando articolo, query e SERP… (può richiedere 1-2 minuti)"):
@@ -403,6 +428,19 @@ def detail_view(df: pd.DataFrame, ds: Dataset):
 
 def bulk_briefs(df: pd.DataFrame, ds: Dataset):
     cand = df[df["is_candidate"] & (df["action"] != ACTIONS["prune"])]
+    if not has_api_key():
+        st.markdown("Senza chiave API puoi scaricare i **prompt** per i primi N candidati: un file per "
+                    "articolo da incollare in una chat di [Claude.ai](https://claude.ai) con la ricerca web attiva.")
+        n = st.number_input("Numero di articoli", 1, max(1, len(cand)), min(10, max(1, len(cand))))
+        from curation.brief import build_chat_prompt
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            for _, r in cand.head(int(n)).iterrows():
+                z.writestr(f"{int(r['priority']):03d}-prompt-{slug(r['url'])}.md",
+                           build_chat_prompt(r, queries_for(ds, r["url"])))
+        st.download_button(f"⬇️ Scarica {int(n)} prompt (ZIP)", buf.getvalue(), "prompt_brief.zip",
+                           "application/zip", type="primary")
+        return
     st.markdown("Genera i brief per i primi N candidati in ordine di priorità ed esportali in un archivio ZIP.")
     n = st.number_input("Numero di articoli", 1, max(1, len(cand)), min(5, max(1, len(cand))))
     if st.button("Genera brief in blocco", type="primary"):

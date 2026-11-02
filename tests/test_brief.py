@@ -70,3 +70,9 @@ def test_refusal_raises(monkeypatch, row_and_queries):
     monkeypatch.setattr(brief.anthropic, "Anthropic", lambda **kw: fake)
     with pytest.raises(RuntimeError):
         brief.generate_brief(*row_and_queries)
+
+
+def test_chat_prompt_is_self_contained(row_and_queries):
+    p = brief.build_chat_prompt(*row_and_queries)
+    assert p.startswith("Sei un senior SEO content strategist")
+    assert "## Checklist per il redattore" in p and row_and_queries[0]["url"] in p

@@ -130,6 +130,11 @@ Scrivi il brief di content curation seguendo questa struttura:
 {BRIEF_TEMPLATE}"""
 
 
+def build_chat_prompt(row: pd.Series, queries: pd.DataFrame | None = None) -> str:
+    """Prompt autosufficiente da incollare in Claude.ai (modalità senza chiave API)."""
+    return (f"{SYSTEM_PROMPT}\n\n---\n\n{build_user_prompt(row, queries, use_web=True)}")
+
+
 def generate_brief(row: pd.Series, queries: pd.DataFrame | None = None, use_web: bool = True,
                    effort: str = "high", api_key: str | None = None) -> BriefResult:
     client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()

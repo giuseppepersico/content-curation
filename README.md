@@ -91,6 +91,12 @@ Il brief contiene:
 
 Puoi generarlo per un singolo articolo oppure in blocco, con export ZIP dei file Markdown.
 
+**Senza chiave API.** Se non è configurata una chiave Anthropic, il tool non chiama l'API: prepara
+il **prompt completo** (istruzioni, metriche, query GSC e testo dell'articolo) da copiare o
+scaricare e incollare in una chat di [Claude.ai](https://claude.ai) con la ricerca web attiva.
+Il brief risultante ha la stessa struttura. Dalla scheda "Brief in blocco" si scarica uno ZIP
+con un prompt per ciascuno dei primi N candidati.
+
 Note:
 - Ogni brief è una chiamata API a pagamento. La profondità di analisi (`effort`) si regola
   dalla sidebar.
